@@ -70,7 +70,7 @@
     <quarkus.version>3.26.0</quarkus.version>
     <chicory.version>1.5.1</chicory.version>
     <zerofs.version>0.1.0</zerofs.version>
-    <javaparser.version>3.26.4</javaparser.version>
+    <javaparser.version>3.27.0</javaparser.version>
     <grpc-kotlin.version>1.4.3</grpc-kotlin.version>
     <grpc.version>1.69.1</grpc.version>
   </properties>
