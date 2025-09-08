@@ -26,6 +26,16 @@
             <artifactId>quarkus-rest</artifactId>
         </dependency>
         <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-grpc</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>io.quarkus</groupId>
+                    <artifactId>quarkus-grpc-codegen</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
             <groupId>io.quarkiverse.grpc.zero</groupId>
             <artifactId>quarkus-grpc-zero</artifactId>
             <version>${project.version}</version>
