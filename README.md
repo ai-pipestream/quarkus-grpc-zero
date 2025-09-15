@@ -12,16 +12,18 @@
 
 ## What
 
-**gRPC Zero** is a drop-in replacement for [`io.quarkus:quarkus-grpc`](https://quarkus.io/guides/grpc) with one major difference:
+**gRPC Zero** is a drop-in replacement for [`io.quarkus:quarkus-grpc-codegen`](https://quarkus.io/guides/grpc), with one major difference:
 
 👉 It removes the need for native `protoc` executables and plugins.
 Instead, everything runs directly on the JVM as a single, portable Java dependency.
+
+ℹ️ `io.quarkus:quarkus-grpc-codegen` is what `io.quarkus:quarkus-grpc` extension uses (currently) to generate proto messages and services
 
 ---
 
 ## Why
 
-The traditional `quarkus-grpc` extension relies on platform-specific binaries (`protoc` and plugins). This approach introduces several challenges:
+The traditional `quarkus-grpc-codegen` module relies on platform-specific binaries (`protoc` and plugins). This approach introduces several challenges:
 
 * ❌ **OS/architecture compatibility issues** – binaries must be shipped for every possible environment.
 * ❌ **External dependencies** – requires tools that may not be available in constrained or hermetic build environments.
@@ -40,7 +42,7 @@ The result: a safer, smaller, more reliable way to enable gRPC codegen in Quarku
 
 ## How
 
-Instead of relying on external `protoc` CLI binaries, this extension embeds all necessary functionality within Java itself, by following these steps:
+Instead of relying on external `protoc` CLI binaries, this module embeds all necessary functionality within Java itself, by following these steps:
 
 1. **Strip out the CLI interface** from `libprotobuf` (to avoid spawning external processes).
 2. **Compile the modified `libprotobuf` into WebAssembly (.wasm)** using `wasi-sdk`.
@@ -61,7 +63,20 @@ To enable gRPC code generation in your [Quarkus](https://quarkus.io/) project, a
 </dependency>
 ```
 
-If you are migrating from `io.quarkus:quarkus-grpc`, remove that dependency first.
+If you are migrating from `io.quarkus:quarkus-grpc`, first exclude the original codegen dependency.
+
+```xml
+    <dependency>
+    <groupId>io.quarkus</groupId>
+    <artifactId>quarkus-grpc</artifactId>
+    <exclusions>
+        <exclusion>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-grpc-codegen</artifactId>
+        </exclusion>
+    </exclusions>
+</dependency>
+```
 
 Also ensure your `quarkus-maven-plugin` configuration includes the `generate-code` goal:
 

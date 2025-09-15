@@ -18,16 +18,6 @@
       <artifactId>quarkus-arc-deployment</artifactId>
     </dependency>
     <dependency>
-      <groupId>io.quarkus</groupId>
-      <artifactId>quarkus-grpc</artifactId>
-      <exclusions>
-        <exclusion>
-            <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-grpc-codegen</artifactId>
-        </exclusion>
-      </exclusions>
-    </dependency>
-    <dependency>
       <groupId>io.smallrye.common</groupId>
       <artifactId>smallrye-common-os</artifactId>
     </dependency>
