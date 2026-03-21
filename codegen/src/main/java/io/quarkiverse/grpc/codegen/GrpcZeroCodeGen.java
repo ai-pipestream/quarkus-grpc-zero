@@ -179,7 +179,15 @@ public class GrpcZeroCodeGen implements CodeGenProvider {
                     var protoName = realitivizeProtoFile(protoFile, protoDirs);
                     log.info("final proto name: " + protoName);
 
-                    descriptorSetBuilder.addAllFile(protobuf.getDescriptors(List.of(protoName)).getFileList());
+                    try {
+                        descriptorSetBuilder.addAllFile(protobuf.getDescriptors(List.of(protoName)).getFileList());
+                    } catch (RuntimeException e) {
+                        throw new CodeGenException(
+                                "Grpc Zero failed while parsing proto '" + protoName + "' (source: " + protoFile + "). "
+                                        + "This is commonly caused by malformed proto syntax, unresolved imports, or duplicated "
+                                        + "merged content in a single file.",
+                                e);
+                    }
                     requestBuilder.addFileToGenerate(protoName);
                 }
 
@@ -188,7 +196,14 @@ public class GrpcZeroCodeGen implements CodeGenProvider {
 
                 // Add all FileDescriptorProto entries from the descriptor set
                 // and all from dependencies
-                resolveDependencies(protobuf, descriptorSet, requestBuilder);
+                try {
+                    resolveDependencies(protobuf, descriptorSet, requestBuilder);
+                } catch (RuntimeException e) {
+                    throw new CodeGenException(
+                            "Grpc Zero failed while resolving transitive proto dependencies. "
+                                    + "Check gathered proto imports and file integrity before code generation.",
+                            e);
+                }
 
                 PluginProtos.CodeGeneratorRequest codeGeneratorRequest = requestBuilder.build();
 
