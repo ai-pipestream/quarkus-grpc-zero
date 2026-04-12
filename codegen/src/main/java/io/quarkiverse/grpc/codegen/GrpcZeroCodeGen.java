@@ -6,7 +6,6 @@ import static java.lang.Boolean.TRUE;
 import static java.nio.file.Files.copy;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.file.FileSystem;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
@@ -169,27 +168,7 @@ public class GrpcZeroCodeGen implements CodeGenProvider {
 
                 var protobuf = Protobuf.builder().withWorkdir(workdir).build();
 
-                for (String protoFile : protoFiles) {
-                    try (InputStream is = Files.newInputStream(Path.of(protoFile))) {
-                        Files.copy(is, workdir.resolve(Path.of(protoFile).getFileName().toString()),
-                                StandardCopyOption.REPLACE_EXISTING);
-                    }
-
-                    log.info("resolving proto file: " + protoFile);
-                    var protoName = realitivizeProtoFile(protoFile, protoDirs);
-                    log.info("final proto name: " + protoName);
-
-                    try {
-                        descriptorSetBuilder.addAllFile(protobuf.getDescriptors(List.of(protoName)).getFileList());
-                    } catch (RuntimeException e) {
-                        throw new CodeGenException(
-                                "Grpc Zero failed while parsing proto '" + protoName + "' (source: " + protoFile + "). "
-                                        + "This is commonly caused by malformed proto syntax, unresolved imports, or duplicated "
-                                        + "merged content in a single file.",
-                                e);
-                    }
-                    requestBuilder.addFileToGenerate(protoName);
-                }
+                processProtoFiles(protoFiles, protoDirs, protobuf, descriptorSetBuilder, requestBuilder);
 
                 // Load the previously generated descriptor
                 DescriptorProtos.FileDescriptorSet descriptorSet = descriptorSetBuilder.build();
@@ -197,7 +176,7 @@ public class GrpcZeroCodeGen implements CodeGenProvider {
                 // Add all FileDescriptorProto entries from the descriptor set
                 // and all from dependencies
                 try {
-                    resolveDependencies(protobuf, descriptorSet, requestBuilder);
+                    resolveDependencies(descriptorSet, requestBuilder);
                 } catch (RuntimeException e) {
                     throw new CodeGenException(
                             "Grpc Zero failed while resolving transitive proto dependencies. "
@@ -250,25 +229,52 @@ public class GrpcZeroCodeGen implements CodeGenProvider {
         return false;
     }
 
-    public static boolean isInSubtree(Path baseDir, Path candidate) {
-        Path base = baseDir.toAbsolutePath().normalize();
-        Path cand = candidate.toAbsolutePath().normalize();
+    void processProtoFiles(List<String> protoFiles, Set<String> protoDirs,
+            Protobuf protobuf, DescriptorProtos.FileDescriptorSet.Builder descriptorSetBuilder,
+            PluginProtos.CodeGeneratorRequest.Builder requestBuilder) throws CodeGenException {
 
-        return cand.startsWith(base);
+        ProtoTypeConflictDetector conflictDetector = new ProtoTypeConflictDetector();
+        Set<String> alreadyRequested = new LinkedHashSet<>();
+
+        for (String protoFile : protoFiles) {
+            log.info("resolving proto file: " + protoFile);
+            var protoName = relativizeProtoFile(protoFile, protoDirs);
+            log.info("final proto name: " + protoName);
+
+            DescriptorProtos.FileDescriptorSet fileDescSet = loadDescriptorSet(protobuf, protoName, protoFile);
+
+            boolean allDuplicate = conflictDetector.checkAndRecord(fileDescSet, protoFile);
+
+            if (allDuplicate && alreadyRequested.contains(protoName)) {
+                log.infof("Skipping duplicate proto file (all types already resolved): %s", protoFile);
+                continue;
+            }
+
+            alreadyRequested.add(protoName);
+            descriptorSetBuilder.addAllFile(fileDescSet.getFileList());
+            requestBuilder.addFileToGenerate(protoName);
+        }
     }
 
-    // TODO: verify is all this dance can be simplified somehow ...
-    private static String realitivizeProtoFile(String protoFile, Set<String> protoDir) {
-        Path protoFilePath = Path.of(protoFile);
-        for (String dir : protoDir) {
-            try {
-                if (isInSubtree(Path.of(dir), protoFilePath)) {
-                    Path base = Path.of(dir).toAbsolutePath().normalize();
-                    Path file = protoFilePath.toAbsolutePath().normalize();
-                    return base.relativize(file).toString();
-                }
-            } catch (IllegalArgumentException e) {
-                // cannot be relativized, skip
+    private static DescriptorProtos.FileDescriptorSet loadDescriptorSet(Protobuf protobuf, String protoName,
+            String protoFile) throws CodeGenException {
+        try {
+            return protobuf.getDescriptors(List.of(protoName));
+        } catch (RuntimeException e) {
+            throw new CodeGenException(
+                    "Grpc Zero failed while parsing proto '" + protoName + "' (source: " + protoFile + "). "
+                            + "This is commonly caused by malformed proto syntax, unresolved imports, or duplicated "
+                            + "merged content in a single file.",
+                    e);
+        }
+    }
+
+    private static String relativizeProtoFile(String protoFile, Set<String> protoDirs) {
+        Path protoFilePath = Path.of(protoFile).toAbsolutePath().normalize();
+        for (String dir : protoDirs) {
+            Path baseDir = Path.of(dir).toAbsolutePath().normalize();
+            if (protoFilePath.startsWith(baseDir)) {
+                return baseDir.relativize(protoFilePath).toString().replace("\\", "/");
             }
         }
         return protoFilePath.getFileName().toString();
@@ -285,11 +291,11 @@ public class GrpcZeroCodeGen implements CodeGenProvider {
         }
     }
 
-    private static void resolveDependencies(Protobuf protobuf,
-            DescriptorProtos.FileDescriptorSet descriptorSet, PluginProtos.CodeGeneratorRequest.Builder requestBuilder)
+    private static void resolveDependencies(DescriptorProtos.FileDescriptorSet descriptorSet,
+            PluginProtos.CodeGeneratorRequest.Builder requestBuilder)
             throws CodeGenException {
         // Use protobuf4j's buildFileDescriptors to resolve all dependencies
-        List<Descriptors.FileDescriptor> fileDescriptors = protobuf.buildFileDescriptors(descriptorSet);
+        List<Descriptors.FileDescriptor> fileDescriptors = Protobuf.buildFileDescriptors(descriptorSet);
 
         // Collect all file descriptors (including transitive dependencies) into a new descriptor set
         DescriptorProtos.FileDescriptorSet.Builder allDescriptorsBuilder = DescriptorProtos.FileDescriptorSet.newBuilder();
@@ -306,7 +312,7 @@ public class GrpcZeroCodeGen implements CodeGenProvider {
     }
 
     public static void copyDirectory(final Path source, final Path target) throws IOException {
-        java.nio.file.Files.walkFileTree(source, new SimpleFileVisitor<Path>() {
+        java.nio.file.Files.walkFileTree(source, new SimpleFileVisitor<>() {
             public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
                 if (java.nio.file.Files.isSymbolicLink(dir)) {
                     return FileVisitResult.SKIP_SUBTREE;
@@ -316,8 +322,7 @@ public class GrpcZeroCodeGen implements CodeGenProvider {
                     Path directory = target.resolve(relative).normalize();
                     if (!directory.toString().equals("/")) {
                         FileAttribute<?>[] attributes = new FileAttribute[0];
-                        PosixFileAttributeView attributeView = (PosixFileAttributeView) java.nio.file.Files
-                                .getFileAttributeView(dir, PosixFileAttributeView.class);
+                        PosixFileAttributeView attributeView = Files.getFileAttributeView(dir, PosixFileAttributeView.class);
                         if (attributeView != null) {
                             Set<PosixFilePermission> permissions = attributeView.readAttributes().permissions();
                             FileAttribute<Set<PosixFilePermission>> attribute = PosixFilePermissions
@@ -397,7 +402,7 @@ public class GrpcZeroCodeGen implements CodeGenProvider {
         boolean scanAll = "all".equalsIgnoreCase(scanDependencies);
 
         List<String> dependenciesToScan = Arrays.stream(scanDependencies.split(",")).map(String::trim)
-                .collect(Collectors.toList());
+                .toList();
 
         ApplicationModel appModel = context.applicationModel();
         List<Path> protoFilesFromDependencies = new ArrayList<>();
@@ -469,7 +474,7 @@ public class GrpcZeroCodeGen implements CodeGenProvider {
 
         boolean scanAll = "all".equals(scanForImports.toLowerCase(Locale.getDefault()));
         List<String> dependenciesToScan = Arrays.stream(scanForImports.split(",")).map(String::trim)
-                .collect(Collectors.toList());
+                .toList();
 
         Set<String> importDirectories = new HashSet<>();
         ApplicationModel appModel = context.applicationModel();
