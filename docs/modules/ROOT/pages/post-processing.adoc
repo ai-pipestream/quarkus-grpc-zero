@@ -1,0 +1,75 @@
+= Post-Processing
+
+include::./includes/attributes.adoc[]
+
+After protoc plugins write Java sources, gRPC Zero runs a post-processing step on the generated files.
+This step uses JavaParser to modify the AST before sources are compiled.
+
+== Default behavior
+
+By default, post-processing performs two changes:
+
+=== Replace `@Generated` annotation
+
+Generated files use `@javax.annotation.Generated` from the protoc Java plugin.
+Quarkus projects expect `@io.quarkus.Generated` instead.
+
+Post-processing rewrites the annotation automatically.
+
+=== Remove `final` from stubs
+
+The grpc-java plugin marks service stub classes and `bindService()` methods as `final`.
+Quarkus gRPC CDI integration requires these to be non-final so subclasses and proxies can be created.
+
+Post-processing removes `final` from:
+
+* Classes whose names end with `Stub`
+* Methods named `bindService`
+
+== Configuration
+
+[cols="3,1,3",options="header"]
+|===
+| Property | Default | Description
+
+| `quarkus.generate.code.grpc-post-processing.skip`
+| `false`
+| Disable all post-processing.
+
+| `quarkus.generate-code.grpc-post-processing.use-quarkus-generated-annotation`
+| `true`
+| Replace `@javax.annotation.Generated` with `@io.quarkus.Generated`.
+
+| `quarkus.generate-code.grpc-post-processing.no-final`
+| `true`
+| Remove `final` from stub classes and `bindService()` methods.
+|===
+
+Example: disable annotation replacement but keep stub final removal disabled:
+
+[source,properties]
+----
+quarkus.generate-code.grpc-post-processing.use-quarkus-generated-annotation=false
+quarkus.generate-code.grpc-post-processing.no-final=true
+----
+
+== Standalone usage
+
+`GrpcZeroPostProcessing` also exposes a `main` method for post-processing an existing source tree outside a Quarkus build.
+This is used by related tooling such as the Quarkus gRPC stub project.
+
+[source,bash]
+----
+java -cp ... io.quarkiverse.grpc.codegen.GrpcZeroPostProcessing /path/to/generated/sources
+----
+
+== Parse failures during post-processing
+
+If JavaParser cannot parse a generated file, post-processing logs an error and skips that file.
+The build continues, but the file keeps its original generated content.
+
+Check build logs for messages starting with `Unable to parse a class generated using protoc`.
+
+== Related configuration
+
+See xref:configuration.adoc[Configuration Reference] for all post-processing properties.

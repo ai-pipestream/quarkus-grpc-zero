@@ -1,0 +1,108 @@
+= Getting Started
+
+include::./includes/attributes.adoc[]
+
+This page shows how to replace `quarkus-grpc-codegen` with gRPC Zero in a Quarkus project.
+
+== Prerequisites
+
+* JDK 17 or later
+* Apache Maven {maven-version}
+* A Quarkus project using the gRPC extension
+
+== Add the dependency
+
+Add `quarkus-grpc-zero` to your application:
+
+[source,xml]
+----
+<dependency>
+  <groupId>io.quarkiverse.grpc.zero</groupId>
+  <artifactId>quarkus-grpc-zero</artifactId>
+  <version>{quarkus-grpc-zero-version}</version>
+</dependency>
+----
+
+If you already depend on `quarkus-grpc`, exclude the original codegen module:
+
+[source,xml]
+----
+<dependency>
+  <groupId>io.quarkus</groupId>
+  <artifactId>quarkus-grpc</artifactId>
+  <exclusions>
+    <exclusion>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-grpc-codegen</artifactId>
+    </exclusion>
+  </exclusions>
+</dependency>
+----
+
+When gRPC Zero is on the classpath, it automatically sets `grpc.codegen.skip=true` so the stock Quarkus codegen does not run.
+
+== Configure the Maven plugin
+
+Ensure `quarkus-maven-plugin` runs the `generate-code` goal during the build:
+
+[source,xml]
+----
+<plugin>
+  <groupId>io.quarkus</groupId>
+  <artifactId>quarkus-maven-plugin</artifactId>
+  <executions>
+    <execution>
+      <goals>
+        <goal>build</goal>
+        <goal>generate-code</goal>
+      </goals>
+    </execution>
+  </executions>
+</plugin>
+----
+
+Without `generate-code`, proto files are not processed at build time.
+
+== Add proto files
+
+Place `.proto` files under:
+
+* `src/main/proto` for production code
+* `src/test/proto` for test-only protos
+
+Example layout:
+
+[source]
+----
+src/main/proto/helloworld.proto
+----
+
+== Build and verify
+
+Run a normal Quarkus build:
+
+[source,bash]
+----
+./mvnw compile quarkus:dev
+----
+
+Generated sources appear under `target/generated-sources/grpc`.
+
+== Skip code generation
+
+To disable gRPC Zero during a build, pass a JVM property:
+
+[source,bash]
+----
+-Dquarkus.zero.grpc.codegen.skip=true
+----
+
+You can also use `-Dgrpc.zero.codegen.skip=true`.
+
+WARNING: Skip flags must be set at the Maven or JVM level. They do not work in `application.properties`.
+
+== Next steps
+
+* xref:how-it-works.adoc[How It Works]
+* xref:configuration.adoc[Configuration Reference]
+* xref:kotlin.adoc[Kotlin Generation]

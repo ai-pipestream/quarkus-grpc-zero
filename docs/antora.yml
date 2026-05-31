@@ -1,0 +1,4 @@
+name: quarkus-grpc-zero
+title: gRPC Zero Codegen
+nav:
+  - modules/ROOT/nav.adoc

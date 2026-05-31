@@ -1,0 +1,42 @@
+= gRPC Zero Codegen
+
+include::./includes/attributes.adoc[]
+
+**gRPC Zero** is a drop-in replacement for `io.quarkus:quarkus-grpc-codegen`.
+It generates Java and Kotlin gRPC stubs from `.proto` files without native `protoc` executables or platform-specific plugins.
+
+Everything runs in-process on the JVM through https://github.com/roastedroot/protobuf4j[protobuf4j].
+
+NOTE: This project is experimental. It passes Quarkus gRPC integration tests, but it has not been widely used in production yet.
+
+== What problem does it solve?
+
+The standard Quarkus gRPC codegen module downloads and runs native `protoc` binaries and plugins.
+That approach can cause problems in CI, containers, and hermetic build environments where native tools are missing or mismatched.
+
+gRPC Zero removes that dependency.
+You add one Maven artifact and code generation runs the same way on every platform that supports the JVM.
+
+== What gets generated?
+
+For each `.proto` file under `src/main/proto` or `src/test/proto`, gRPC Zero produces:
+
+* Protobuf message classes (Java plugin)
+* gRPC service stubs and base classes (grpc-java plugin)
+* Mutiny-based reactive stubs (Quarkus MutinyGrpcGenerator)
+* Optional Kotlin stubs when Kotlin generation is enabled
+
+Generated sources are written to `target/generated-sources/grpc`.
+
+== Where to go next
+
+* xref:getting-started.adoc[Getting Started]: add the dependency and configure Maven
+* xref:how-it-works.adoc[How It Works]: build-time pipeline and architecture
+* xref:configuration.adoc[Configuration Reference]: all supported properties
+* https://quarkus.io/guides/grpc[Quarkus gRPC guide]: runtime usage of generated services
+
+== Related documentation
+
+Full documentation is published at {docs-url} once registered with the Quarkiverse docs site.
+
+For runtime gRPC configuration (clients, servers, TLS), see the https://quarkus.io/guides/grpc-generation-reference[Quarkus gRPC generation reference].

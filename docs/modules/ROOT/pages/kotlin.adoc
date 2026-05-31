@@ -1,0 +1,71 @@
+= Kotlin Generation
+
+include::./includes/attributes.adoc[]
+
+gRPC Zero can generate Kotlin protobuf and gRPC stub classes alongside the Java output.
+
+== When Kotlin generation runs
+
+Kotlin generation is enabled when either condition is true:
+
+* `quarkus-kotlin` is present on the application classpath
+* `quarkus.generate-code.grpc.kotlin.generate=true` is set explicitly
+
+To force Kotlin generation even without auto-detection, set the property in `application.properties`:
+
+[source,properties]
+----
+quarkus.generate-code.grpc.kotlin.generate=true
+----
+
+To disable Kotlin generation when `quarkus-kotlin` is present, set the property to `false`.
+
+== Generated output
+
+The Kotlin plugin runs after the Java, grpc-java, and Mutiny generators.
+Output is written to the same `target/generated-sources/grpc` directory.
+
+Generated files include Kotlin message classes and gRPC Kotlin stubs for services defined in your `.proto` files.
+
+== Maven setup
+
+A Kotlin gRPC project needs the usual Quarkus Kotlin dependencies plus gRPC Zero configured as described in xref:getting-started.adoc[Getting Started].
+
+Example dependency layout:
+
+[source,xml]
+----
+<dependency>
+  <groupId>io.quarkus</groupId>
+  <artifactId>quarkus-grpc</artifactId>
+  <exclusions>
+    <exclusion>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-grpc-codegen</artifactId>
+    </exclusion>
+  </exclusions>
+</dependency>
+<dependency>
+  <groupId>io.quarkiverse.grpc.zero</groupId>
+  <artifactId>quarkus-grpc-zero</artifactId>
+  <version>{quarkus-grpc-zero-version}</version>
+</dependency>
+<dependency>
+  <groupId>io.quarkus</groupId>
+  <artifactId>quarkus-kotlin</artifactId>
+</dependency>
+----
+
+== Verify generation
+
+After `./mvnw compile`, check `target/generated-sources/grpc` for `.kt` files matching your proto package.
+
+If no Kotlin files appear:
+
+* Confirm `quarkus.generate-code.grpc.kotlin.generate=true` or `quarkus-kotlin` is on the classpath
+* Confirm `.proto` files exist under `src/main/proto`
+* Confirm `generate-code` is configured in `quarkus-maven-plugin`
+
+== Related configuration
+
+See xref:configuration.adoc[Configuration Reference] for the `quarkus.generate-code.grpc.kotlin.generate` property.
