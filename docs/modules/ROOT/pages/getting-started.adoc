@@ -90,16 +90,23 @@ Generated sources appear under `target/generated-sources/grpc`.
 
 == Skip code generation
 
-To disable gRPC Zero during a build, pass a JVM property:
+To disable gRPC Zero during a build, set one of these properties:
+
+[source,properties]
+----
+quarkus.zero.grpc.codegen.skip=true
+----
+
+Or pass a JVM system property:
 
 [source,bash]
 ----
 -Dquarkus.zero.grpc.codegen.skip=true
+-Dgrpc.zero.codegen.skip=true
 ----
 
-You can also use `-Dgrpc.zero.codegen.skip=true`.
-
-WARNING: Skip flags must be set at the Maven or JVM level. They do not work in `application.properties`.
+NOTE: `quarkus.zero.grpc.codegen.skip` is read from MicroProfile Config, so it works in `application.properties`.
+`grpc.zero.codegen.skip` is read only from JVM system properties.
 
 == Next steps
 

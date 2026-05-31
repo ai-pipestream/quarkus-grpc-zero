@@ -67,14 +67,21 @@ If you see duplicate generation errors or conflicting generated files:
 * Exclude `quarkus-grpc-codegen` from the `quarkus-grpc` dependency
 * Do not add both codegen modules intentionally
 
-== Skip properties not working from application.properties
+== Skip properties not working
 
-`quarkus.zero.grpc.codegen.skip` and `grpc.zero.codegen.skip` are read from JVM system properties only.
-Set them on the Maven command line:
+`quarkus.zero.grpc.codegen.skip` is read from MicroProfile Config during the `generate-code` phase.
+It works in `application.properties`, YAML, or as a Maven property:
+
+[source,properties]
+----
+quarkus.zero.grpc.codegen.skip=true
+----
+
+`grpc.zero.codegen.skip` is read only from JVM system properties:
 
 [source,bash]
 ----
-./mvnw compile -Dquarkus.zero.grpc.codegen.skip=true
+./mvnw compile -Dgrpc.zero.codegen.skip=true
 ----
 
 == Post-processing warnings

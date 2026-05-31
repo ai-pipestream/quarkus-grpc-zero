@@ -18,6 +18,13 @@ To force Kotlin generation even without auto-detection, set the property in `app
 quarkus.generate-code.grpc.kotlin.generate=true
 ----
 
+To disable Kotlin generation when `quarkus-kotlin` is present:
+
+[source,properties]
+----
+quarkus.generate-code.grpc.kotlin.generate=false
+----
+
 To disable Kotlin generation when `quarkus-kotlin` is present, set the property to `false`.
 
 == Generated output

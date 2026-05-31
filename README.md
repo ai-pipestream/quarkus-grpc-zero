@@ -105,17 +105,21 @@ See [Getting Started](docs/modules/ROOT/pages/getting-started.adoc) for more det
 
 ## Configuration
 
-`quarkus-grpc-zero` supports the same configuration options as [`quarkus-grpc`](https://quarkus.io/guides/grpc-generation-reference).
+Build-time properties are documented in [Configuration Reference](docs/modules/ROOT/pages/configuration.adoc).
 
-Additionally, you can skip code generation with:
+To skip code generation:
 
 ```bash
 -Dquarkus.zero.grpc.codegen.skip=true
 ```
 
-Must be set at the **Maven/JVM level**. It does **not** work when placed in `application.properties`.
+Or in `application.properties`:
 
-See [Configuration Reference](docs/modules/ROOT/pages/configuration.adoc) for all gRPC Zero properties.
+```properties
+quarkus.zero.grpc.codegen.skip=true
+```
+
+The JVM-only alternative is `-Dgrpc.zero.codegen.skip=true`.
 
 # Thanks
 

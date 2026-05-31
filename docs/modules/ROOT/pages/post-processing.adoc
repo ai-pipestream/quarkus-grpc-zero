@@ -28,20 +28,23 @@ Post-processing removes `final` from:
 
 == Configuration
 
-[cols="3,1,3",options="header"]
+[cols="3,1,2,3",options="header"]
 |===
-| Property | Default | Description
+| Property | Default | Config source | Description
 
 | `quarkus.generate.code.grpc-post-processing.skip`
 | `false`
-| Disable all post-processing.
+| `application.properties`, YAML, `-D`, or JVM system property
+| Disable all post-processing. The key uses `.generate.code.` (not `.generate-code.`).
 
 | `quarkus.generate-code.grpc-post-processing.use-quarkus-generated-annotation`
 | `true`
+| `application.properties`, YAML, `-D`, or JVM system property
 | Replace `@javax.annotation.Generated` with `@io.quarkus.Generated`.
 
 | `quarkus.generate-code.grpc-post-processing.no-final`
 | `true`
+| `application.properties`, YAML, `-D`, or JVM system property
 | Remove `final` from stub classes and `bindService()` methods.
 |===
 

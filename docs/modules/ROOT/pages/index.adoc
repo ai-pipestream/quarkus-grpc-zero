@@ -39,4 +39,5 @@ Generated sources are written to `target/generated-sources/grpc`.
 
 Full documentation is published at {docs-url} once registered with the Quarkiverse docs site.
 
-For runtime gRPC configuration (clients, servers, TLS), see the https://quarkus.io/guides/grpc-generation-reference[Quarkus gRPC generation reference].
+For runtime gRPC configuration (clients, servers, TLS), see the https://quarkus.io/guides/grpc[Quarkus gRPC guide].
+Build-time codegen properties are listed in xref:configuration.adoc[Configuration Reference].

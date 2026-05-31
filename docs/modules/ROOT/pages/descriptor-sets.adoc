@@ -18,7 +18,7 @@ When enabled, gRPC Zero writes a descriptor set built from all protos compiled i
 
 == Output location
 
-By default, the file is written to the codegen output directory as `descriptor_set.dsc`.
+By default, the file is written to the codegen output directory (`target/generated-sources/grpc`) as `descriptor_set.dsc`.
 
 Customize the filename:
 
@@ -27,7 +27,8 @@ Customize the filename:
 quarkus.generate-code.grpc.descriptor-set.name=hello.dsc
 ----
 
-Customize the output directory (relative to the codegen work directory):
+Customize the output directory.
+When set, the path is resolved relative to the codegen work directory, not the output directory:
 
 [source,properties]
 ----

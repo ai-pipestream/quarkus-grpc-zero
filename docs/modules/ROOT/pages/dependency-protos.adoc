@@ -3,7 +3,7 @@
 include::./includes/attributes.adoc[]
 
 By default, gRPC Zero compiles `.proto` files from your project source tree only.
-You can also compile protos packaged inside Maven dependency JARs and resolve imports from dependency artifacts.
+You can also compile protos packaged inside runtime Maven dependency JARs and resolve imports from dependency artifacts.
 
 == Scanning dependencies for protos to compile
 
@@ -79,6 +79,8 @@ A log message is emitted when this sanitization occurs.
 
 Dependency proto scanning for compilation is disabled during test-only codegen (`context.test()` is true).
 Project protos under `src/test/proto` are still processed normally.
+
+NOTE: Only runtime dependencies from the application model are scanned, not test-scoped dependencies.
 
 == Troubleshooting import errors
 
