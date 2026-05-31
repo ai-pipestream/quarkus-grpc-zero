@@ -1,0 +1,168 @@
+= Configuration Reference
+
+include::./includes/attributes.adoc[]
+
+gRPC Zero reads build-time configuration from `application.properties`, `application.yaml`, and Maven/JVM system properties.
+
+Most keys use the `quarkus.generate-code.grpc` prefix.
+They apply during the `generate-code` phase, not at application runtime.
+
+== Skip flags
+
+[cols="3,1,2,3",options="header"]
+|===
+| Property | Default | Config source | Description
+
+| `quarkus.zero.grpc.codegen.skip`
+| `false`
+| `application.properties`, YAML, or `-D` via MicroProfile Config
+| Skip gRPC Zero code generation entirely.
+
+| `grpc.zero.codegen.skip`
+| `false`
+| JVM system property only (`-Dgrpc.zero.codegen.skip=true`)
+| Same effect as `quarkus.zero.grpc.codegen.skip`, but read only from `System.getProperties()`.
+
+| `quarkus.generate.code.grpc-post-processing.skip`
+| `false`
+| `application.properties`, YAML, `-D` via MicroProfile Config, or JVM system property
+| Skip all post-processing of generated Java sources. The key uses `.generate.code.` (not `.generate-code.`).
+|===
+
+== Kotlin generation
+
+[cols="3,1,2,3",options="header"]
+|===
+| Property | Default | Config source | Description
+
+| `quarkus.generate-code.grpc.kotlin.generate`
+| auto
+| `application.properties`, YAML, or `-D`
+| When unset, Kotlin generation runs if `quarkus-kotlin` is on the classpath. Set to `true` to force it on, or `false` to disable it.
+|===
+
+See xref:kotlin.adoc[Kotlin Generation] for details.
+
+== Descriptor set output
+
+[cols="3,1,2,3",options="header"]
+|===
+| Property | Default | Config source | Description
+
+| `quarkus.generate-code.grpc.descriptor-set.generate`
+| `false`
+| `application.properties`, YAML, or `-D`
+| Write a protobuf `FileDescriptorSet` binary file during codegen.
+
+| `quarkus.generate-code.grpc.descriptor-set.output-dir`
+| codegen output directory
+| `application.properties`, YAML, or `-D`
+| When set, directory relative to the codegen work directory. When unset, the file is written to the codegen output directory (`target/generated-sources/grpc` by default).
+
+| `quarkus.generate-code.grpc.descriptor-set.name`
+| `descriptor_set.dsc`
+| `application.properties`, YAML, or `-D`
+| Filename for the descriptor set output.
+|===
+
+See xref:descriptor-sets.adoc[Descriptor Sets].
+
+== Protos from dependencies
+
+[cols="3,1,2,3",options="header"]
+|===
+| Property | Default | Config source | Description
+
+| `quarkus.generate-code.grpc.scan-for-proto`
+| `none`
+| `application.properties`, YAML, or `-D`
+| Scan runtime dependency JARs for `.proto` files to compile. Use `all`, `none` (case insensitive), or a comma-separated list of `groupId:artifactId` coordinates.
+
+| `quarkus.generate-code.grpc.scan-for-proto-include."groupId:artifactId"`
+| none
+| `application.properties`, YAML, or `-D`
+| Include glob patterns for a specific dependency. Key is quoted because of the colon in the coordinate.
+
+| `quarkus.generate-code.grpc.scan-for-proto-exclude."groupId:artifactId"`
+| none
+| `application.properties`, YAML, or `-D`
+| Exclude glob patterns for a specific dependency.
+|===
+
+See xref:dependency-protos.adoc[Protos from Dependencies].
+
+== Import scanning
+
+[cols="3,1,2,3",options="header"]
+|===
+| Property | Default | Config source | Description
+
+| `quarkus.generate-code.grpc.scan-for-imports`
+| `com.google.protobuf:protobuf-java`
+| `application.properties`, YAML, or `-D`
+| Runtime dependencies to scan for imported `.proto` files. Use `all`, `none` (case insensitive), or a comma-separated list of coordinates.
+|===
+
+== Post-processing
+
+[cols="3,1,2,3",options="header"]
+|===
+| Property | Default | Config source | Description
+
+| `quarkus.generate-code.grpc-post-processing.use-quarkus-generated-annotation`
+| `true`
+| `application.properties`, YAML, `-D`, or JVM system property
+| Replace `@javax.annotation.Generated` with `@io.quarkus.Generated`.
+
+| `quarkus.generate-code.grpc-post-processing.no-final`
+| `true`
+| `application.properties`, YAML, `-D`, or JVM system property
+| Remove `final` from generated `*Stub` classes and `bindService()` methods.
+|===
+
+See xref:post-processing.adoc[Post-Processing].
+
+== Proto source directory
+
+[cols="3,1,2,3",options="header"]
+|===
+| Property | Default | Config source | Description
+
+| `quarkus.grpc.codegen.proto-directory`
+| Quarkus default proto directory
+| Codegen provider init properties
+| Override the input directory for proto files. When unset, Quarkus uses the standard proto source directory for the provider (`src/main/proto` or `src/test/proto`).
+|===
+
+== Side effects
+
+When gRPC Zero runs, it sets the JVM system property `grpc.codegen.skip=true` so the stock `quarkus-grpc-codegen` provider does not run.
+This is not a user-facing configuration property.
+
+== Runtime gRPC configuration
+
+Client, server, and TLS settings are configured through the https://quarkus.io/guides/grpc[Quarkus gRPC guide].
+Those runtime properties are separate from the build-time keys listed above.
+
+gRPC Zero reads only the properties implemented in `GrpcZeroCodeGen` and `GrpcZeroPostProcessing`.
+Properties documented for stock `quarkus-grpc-codegen` but not listed here (for example `quarkus.generate-code.grpc.use-arg-file`) are not used by gRPC Zero.
+
+== Example: minimal application.properties
+
+[source,properties]
+----
+quarkus.generate-code.grpc.kotlin.generate=true
+quarkus.generate-code.grpc.descriptor-set.generate=true
+quarkus.generate-code.grpc.descriptor-set.name=hello.dsc
+----
+
+== Example: scan protos from a dependency
+
+[source,properties]
+----
+quarkus.generate-code.grpc.scan-for-proto=io.example:my-protos
+quarkus.generate-code.grpc.scan-for-proto-include."io.example\:my-protos"=protobuf/**
+quarkus.generate-code.grpc.scan-for-proto-exclude."io.example\:my-protos"=internal/**
+----
+
+NOTE: Escape colons in quoted map keys as `\:` in properties files.
