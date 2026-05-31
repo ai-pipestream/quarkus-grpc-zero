@@ -1,0 +1,105 @@
+= Troubleshooting
+
+include::./includes/attributes.adoc[]
+
+This page covers common gRPC Zero build failures and how to resolve them.
+
+== Proto parsing failures
+
+When protobuf4j cannot parse a proto file, the build fails with a `CodeGenException` similar to:
+
+[source]
+----
+Grpc Zero failed while parsing proto 'my/service.proto' (source: /path/to/my/service.proto).
+This is commonly caused by malformed proto syntax, unresolved imports, or duplicated
+merged content in a single file.
+----
+
+=== Check proto syntax
+
+Validate the `.proto` file with a standalone parser or IDE plugin.
+Common syntax issues include missing semicolons, invalid field numbers, and mismatched braces.
+
+=== Check imports
+
+Unresolved imports cause parsing failures.
+Verify:
+
+* The imported file exists at the expected path
+* xref:dependency-protos.adoc[scan-for-imports] includes the dependency that packages the import
+* Import paths match the directory layout inside the JAR or source tree
+
+=== Check for duplicate merged content
+
+If multiple proto files define the same message in a way that gets merged incorrectly, parsing can fail.
+Review whether two sources contribute conflicting content for the same file path in the in-memory workspace.
+
+== Transitive dependency resolution failures
+
+When dependency resolution fails, the error message is:
+
+[source]
+----
+Grpc Zero failed while resolving transitive proto dependencies.
+Check gathered proto imports and file integrity before code generation.
+----
+
+Actions:
+
+* Confirm all imported protos are available through xref:dependency-protos.adoc[scan-for-imports]
+* Check that dependency JARs are not corrupted or incomplete
+* Review recent changes to shared proto libraries
+
+== No generated sources
+
+If `target/generated-sources/grpc` is empty after build:
+
+* Confirm `.proto` files exist under `src/main/proto` or `src/test/proto`
+* Confirm `quarkus-maven-plugin` includes the `generate-code` goal (see xref:getting-started.adoc[Getting Started])
+* Confirm gRPC Zero is not skipped via `-Dquarkus.zero.grpc.codegen.skip=true`
+* Confirm `quarkus-grpc-zero` is on the classpath and `quarkus-grpc-codegen` is excluded
+
+== Both codegen modules running
+
+gRPC Zero sets `grpc.codegen.skip=true` when it runs.
+If you see duplicate generation errors or conflicting generated files:
+
+* Exclude `quarkus-grpc-codegen` from the `quarkus-grpc` dependency
+* Do not add both codegen modules intentionally
+
+== Skip properties not working from application.properties
+
+`quarkus.zero.grpc.codegen.skip` and `grpc.zero.codegen.skip` are read from JVM system properties only.
+Set them on the Maven command line:
+
+[source,bash]
+----
+./mvnw compile -Dquarkus.zero.grpc.codegen.skip=true
+----
+
+== Post-processing warnings
+
+If post-processing logs `Unable to parse a class generated using protoc`, the generated file may use syntax JavaParser cannot handle.
+The build usually continues, but annotation replacement or final removal may not apply to that file.
+
+Try:
+
+* Updating gRPC Zero to the latest version
+* Filing an issue with the problematic generated file attached
+
+== Getting more log output
+
+Enable debug logging for the codegen package during Maven builds:
+
+[source,bash]
+----
+./mvnw compile -Dquarkus.log.category.\"io.quarkiverse.grpc.codegen\".level=DEBUG
+----
+
+Look for log lines such as `resolving proto file:` and `grpc file generated:` to trace the pipeline.
+
+== Still stuck?
+
+* Review xref:how-it-works.adoc[How It Works] for the full pipeline
+* Compare your setup with the integration tests in the https://github.com/quarkiverse/quarkus-grpc-zero[{project-url}] repository
+* Open an issue on GitHub with the full build log and relevant `.proto` files

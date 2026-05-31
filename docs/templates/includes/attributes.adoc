@@ -1,0 +1,5 @@
+:quarkus-version: ${quarkus.version}
+:quarkus-grpc-zero-version: ${release.current-version}
+:maven-version: 3.8.1+
+:project-url: https://github.com/quarkiverse/quarkus-grpc-zero
+:docs-url: https://docs.quarkiverse.io/quarkus-grpc-zero/dev

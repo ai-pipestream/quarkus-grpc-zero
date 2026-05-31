@@ -1,12 +1,14 @@
 # Quarkus – gRPC Zero Codegen (Experimental)
 
-> 🚧 **Experimental**
-> This extension is in its early stages. It successfully passes all relevant Quarkus integration tests, but hasn’t yet been battle-tested in production.
-> We’d love for you to try it, push its boundaries, and share feedback to make it better.
+> **Experimental**
+> This extension is in its early stages. It successfully passes all relevant Quarkus integration tests, but has not yet been battle-tested in production.
+> We would love for you to try it, push its boundaries, and share feedback to make it better.
 
 [![Build](https://img.shields.io/github/actions/workflow/status/quarkiverse/quarkus-grpc-zero/build.yml?branch=main\&logo=GitHub\&style=flat-square)](https://github.com/quarkiverse/quarkus-grpc-zero/actions?query=workflow%3ABuild)
 [![Maven Central](https://img.shields.io/maven-central/v/io.quarkiverse.grpc.zero/quarkus-grpc-zero.svg?label=Maven%20Central\&style=flat-square)](https://search.maven.org/artifact/io.quarkiverse.grpc.zero/quarkus-grpc-zero)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=flat-square)](https://opensource.org/licenses/Apache-2.0)
+
+**Documentation:** https://docs.quarkiverse.io/quarkus-grpc-zero/dev (after registration with Quarkiverse docs) or see the [`docs/`](docs/) module in this repository.
 
 ---
 
@@ -14,10 +16,10 @@
 
 **gRPC Zero** is a drop-in replacement for [`io.quarkus:quarkus-grpc-codegen`](https://quarkus.io/guides/grpc), with one major difference:
 
-👉 It removes the need for native `protoc` executables and plugins.
+It removes the need for native `protoc` executables and plugins.
 Instead, everything runs directly on the JVM as a single, portable Java dependency.
 
-ℹ️ `io.quarkus:quarkus-grpc-codegen` is what `io.quarkus:quarkus-grpc` extension uses (currently) to generate proto messages and services
+`io.quarkus:quarkus-grpc-codegen` is what the `io.quarkus:quarkus-grpc` extension uses to generate proto messages and services.
 
 ---
 
@@ -25,29 +27,31 @@ Instead, everything runs directly on the JVM as a single, portable Java dependen
 
 The traditional `quarkus-grpc-codegen` module relies on platform-specific binaries (`protoc` and plugins). This approach introduces several challenges:
 
-* ❌ **OS/architecture compatibility issues** – binaries must be shipped for every possible environment.
-* ❌ **External dependencies** – requires tools that may not be available in constrained or hermetic build environments.
-* ❌ **Maintenance overhead** – keeping native executables up to date across platforms is difficult.
+* **OS/architecture compatibility issues**: binaries must be shipped for every possible environment.
+* **External dependencies**: requires tools that may not be available in constrained or hermetic build environments.
+* **Maintenance overhead**: keeping native executables up to date across platforms is difficult.
 
 **gRPC Zero** solves these problems by providing:
 
-* ✅ **Self-contained code generation** – no native tools required.
-* ✅ **Full portability** – identical behavior on any JVM.
-* ✅ **Lightweight dependency** – \~1.1 MB at the time of writing.
-* ✅ **Consistent results** – passes all Quarkus integration tests with no regressions.
+* **Self-contained code generation**: no native tools required.
+* **Full portability**: identical behavior on any JVM.
+* **Lightweight dependency**: ~1.1 MB at the time of writing.
+* **Consistent results**: passes all Quarkus integration tests with no regressions.
 
-The result: a safer, smaller, more reliable way to enable gRPC codegen in Quarkus projects.
+The result is a safer, smaller, more reliable way to enable gRPC codegen in Quarkus projects.
 
 ---
 
 ## How
 
-Instead of relying on external `protoc` CLI binaries, this module embeds all necessary functionality within Java itself, by following these steps:
+Instead of downloading native `protoc` binaries, gRPC Zero uses [protobuf4j](https://github.com/roastedroot/protobuf4j) to run protoc plugins in-process on the JVM:
 
-1. **Strip out the CLI interface** from `libprotobuf` (to avoid spawning external processes).
-2. **Compile the modified `libprotobuf` into WebAssembly (.wasm)** using `wasi-sdk`.
-3. **Translate the resulting WebAssembly into pure Java bytecode** at build time using [Chicory](https://github.com/dylibso/chicory).
-4. **Use this generated Java dependency**, which contains the full `protoc` capabilities (and plugin support), to perform gRPC code generation **in-process on the JVM**.
+1. Collect `.proto` files from the project and optional Maven dependencies.
+2. Parse descriptors and resolve imports through protobuf4j.
+3. Run the Java, grpc-java, Mutiny, and optional Kotlin plugins without external processes.
+4. Post-process generated sources for Quarkus compatibility.
+
+See [How It Works](docs/modules/ROOT/pages/how-it-works.adoc) for the full pipeline.
 
 ---
 
@@ -95,6 +99,8 @@ Also ensure your `quarkus-maven-plugin` configuration includes the `generate-cod
 </plugin>
 ```
 
+See [Getting Started](docs/modules/ROOT/pages/getting-started.adoc) for more detail.
+
 ---
 
 ## Configuration
@@ -107,11 +113,13 @@ Additionally, you can skip code generation with:
 -Dquarkus.zero.grpc.codegen.skip=true
 ```
 
-> Must be set at the **Maven/JVM level** — it does **not** work when placed in `application.properties`.
+Must be set at the **Maven/JVM level**. It does **not** work when placed in `application.properties`.
+
+See [Configuration Reference](docs/modules/ROOT/pages/configuration.adoc) for all gRPC Zero properties.
 
 # Thanks
 
 This project is building on the shoulders of giants. Special thanks to:
 
-- [wasilibs/go-protoc-gen-grpc-java](wasilibs/go-protoc-gen-grpc-java) – for prior work and invaluable help
-- [dylibso/chicory](https://github.com/dylibso/chicory) – for the Wasm compiler to Java Bytecode
+- [protobuf4j](https://github.com/roastedroot/protobuf4j) for in-process protoc plugin execution on the JVM
+- [wasilibs/go-protoc-gen-grpc-java](https://github.com/wasilibs/go-protoc-gen-grpc-java) for prior work and invaluable help

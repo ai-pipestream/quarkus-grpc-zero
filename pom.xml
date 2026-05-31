@@ -170,6 +170,7 @@
       </activation>
       <modules>
         <module>codegen</module>
+        <module>docs</module>
         <module>integration-tests</module>
       </modules>
     </profile>
