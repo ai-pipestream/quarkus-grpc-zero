@@ -1,3 +1,4 @@
 target
 .idea
 .cache
+docs/modules/ROOT/pages/includes/attributes.adoc

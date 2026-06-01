@@ -1,0 +1,102 @@
+= How It Works
+
+include::./includes/attributes.adoc[]
+
+gRPC Zero registers as a Quarkus `CodeGenProvider` with provider id `grpc`.
+Quarkus invokes it during the `generate-code` build phase when `.proto` files are present.
+
+== High-level pipeline
+
+. Collect proto files from the project and optional Maven dependencies
+. Copy protos and import paths into an in-memory workspace (ZeroFs)
+. Parse descriptors with protobuf4j
+. Resolve transitive proto dependencies
+. Run code generator plugins in-process on the JVM
+. Write generated sources to `target/generated-sources/grpc`
+. Run post-processing on the generated Java sources
+
+== Proto discovery
+
+The generator scans:
+
+* `src/main/proto` (or a custom directory via `quarkus.grpc.codegen.proto-directory`)
+* `src/test/proto` during test builds
+* Optional dependency JARs when xref:dependency-protos.adoc[scan-for-proto] is configured
+
+Import paths come from xref:dependency-protos.adoc[scan-for-imports], which defaults to `com.google.protobuf:protobuf-java`.
+
+== Descriptor parsing
+
+Protos are parsed through https://github.com/roastedroot/protobuf4j[protobuf4j].
+The library builds a `FileDescriptorSet` and resolves imports without calling an external `protoc` binary.
+
+If parsing fails, the build stops with a `CodeGenException` that names the proto file and the likely cause.
+See xref:troubleshooting.adoc[Troubleshooting] for common failure modes.
+
+== Code generator plugins
+
+After descriptors are ready, gRPC Zero runs these plugins in order:
+
+[cols="1,3",options="header"]
+|===
+| Plugin | Output
+
+| protobuf Java (`NativePlugin.JAVA`)
+| Message and enum classes
+
+| grpc-java (`NativePlugin.GRPC_JAVA`)
+| Service stubs and `Grpc` utility classes
+
+| Quarkus `MutinyGrpcGenerator`
+| Mutiny-based reactive service stubs
+
+| Kotlin (`NativePlugin.KOTLIN`, optional)
+| Kotlin message and stub classes
+|===
+
+All plugins receive the same `CodeGeneratorRequest` built from the resolved descriptor set.
+
+== Dependency resolution
+
+Before plugins run, gRPC Zero collects all transitive file descriptors referenced by the protos being compiled.
+This ensures imported messages and services from other files are included in the generator request.
+
+== Post-processing
+
+The built-in post-processor adjusts generated Java sources:
+
+* Replaces `@javax.annotation.Generated` with `@io.quarkus.Generated`
+* Removes `final` from `*Stub` classes and `bindService()` methods
+
+Post-processing can be disabled or tuned. See xref:post-processing.adoc[Post-Processing].
+
+== Optional outputs
+
+When enabled, gRPC Zero also writes a protobuf descriptor set file.
+See xref:descriptor-sets.adoc[Descriptor Sets].
+
+== Comparison with quarkus-grpc-codegen
+
+|===
+| quarkus-grpc-codegen | gRPC Zero
+
+| Downloads native `protoc` and plugins per OS/arch
+| Runs protobuf4j plugins in-process on the JVM
+
+| Spawns external processes
+| No external binaries required
+
+| Same Quarkus integration when configured correctly
+| Same Quarkus integration when configured correctly
+|===
+
+== Implementation entry point
+
+The core logic lives in `GrpcZeroCodeGen`, registered through the Quarkus `CodeGenProvider` service loader file:
+
+[source]
+----
+META-INF/services/io.quarkus.deployment.CodeGenProvider
+----
+
+For runtime gRPC usage after codegen, continue with the https://quarkus.io/guides/grpc[Quarkus gRPC guide].

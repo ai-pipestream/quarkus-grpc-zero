@@ -1,0 +1,67 @@
+= Descriptor Sets
+
+include::./includes/attributes.adoc[]
+
+A protobuf descriptor set is a binary file containing serialized `FileDescriptorProto` messages.
+Tools such as gRPC reflection, API gateways, and schema registries can consume descriptor sets without access to original `.proto` files.
+
+gRPC Zero can write a descriptor set during code generation.
+
+== Enable descriptor set output
+
+[source,properties]
+----
+quarkus.generate-code.grpc.descriptor-set.generate=true
+----
+
+When enabled, gRPC Zero writes a descriptor set built from all protos compiled in the current codegen run.
+
+== Output location
+
+By default, the file is written to the codegen output directory (`target/generated-sources/grpc`) as `descriptor_set.dsc`.
+
+Customize the filename:
+
+[source,properties]
+----
+quarkus.generate-code.grpc.descriptor-set.name=hello.dsc
+----
+
+Customize the output directory.
+When set, the path is resolved relative to the codegen work directory, not the output directory:
+
+[source,properties]
+----
+quarkus.generate-code.grpc.descriptor-set.output-dir=proto
+----
+
+Example combining all three properties:
+
+[source,properties]
+----
+quarkus.generate-code.grpc.descriptor-set.generate=true
+quarkus.generate-code.grpc.descriptor-set.name=hello.dsc
+quarkus.generate-code.grpc.descriptor-set.output-dir=proto
+----
+
+== What is included
+
+The descriptor set contains file descriptors for:
+
+* All protos compiled in the current run
+* Transitive dependencies resolved during descriptor building
+
+It does not replace generated Java or Kotlin source files.
+It is an additional build artifact for tooling that needs schema metadata.
+
+== When to use descriptor sets
+
+Common use cases:
+
+* Feed schema metadata to external tools at deploy time
+* Validate that generated code matches a known schema version
+* Support gRPC server reflection or custom tooling that reads binary descriptors
+
+== Related configuration
+
+See xref:configuration.adoc[Configuration Reference] for all descriptor set properties.
