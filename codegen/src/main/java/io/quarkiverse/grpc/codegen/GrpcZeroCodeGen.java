@@ -6,6 +6,7 @@ import static java.lang.Boolean.TRUE;
 import static java.nio.file.Files.copy;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystem;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
@@ -17,17 +18,21 @@ import java.nio.file.attribute.FileAttribute;
 import java.nio.file.attribute.PosixFileAttributeView;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.HexFormat;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -72,6 +77,20 @@ public class GrpcZeroCodeGen implements CodeGenProvider {
     private static final String DESCRIPTOR_SET_FILENAME = "quarkus.generate-code.grpc.descriptor-set.name";
 
     private static final String GENERATE_KOTLIN = "quarkus.generate-code.grpc.kotlin.generate";
+
+    // Output-resident marker holding the hash of the last successful codegen inputs.
+    // Lives in outDir so it shares the generated sources' lifecycle (a `clean` wipes both).
+    private static final String CODEGEN_CACHE_MARKER = ".grpc-zero-inputs.sha256";
+    // Config keys whose values change generated output; folded into the cache key.
+    private static final String[] CACHE_RELEVANT_CONFIG_KEYS = {
+            GENERATE_KOTLIN,
+            GENERATE_DESCRIPTOR_SET,
+            DESCRIPTOR_SET_OUTPUT_DIR,
+            DESCRIPTOR_SET_FILENAME,
+            POST_PROCESS_SKIP,
+            SCAN_DEPENDENCIES_FOR_PROTO,
+            SCAN_FOR_IMPORTS,
+    };
 
     private String input;
     private boolean hasQuarkusKotlinDependency;
@@ -153,6 +172,16 @@ public class GrpcZeroCodeGen implements CodeGenProvider {
             Collection<String> protosToImport = gatherDirectoriesWithImports(workDir.resolve("protoc-dependencies"),
                     context);
 
+            // Input-hash cache: skip the (slow) WASM codegen when the proto set, the
+            // output-affecting config and the grpc-zero version are all unchanged and
+            // the previously generated output is still present.
+            String inputHash = computeInputHash(protoFiles, protosToImport, context);
+            Path cacheMarker = outDir.resolve(CODEGEN_CACHE_MARKER);
+            if (isUpToDate(inputHash, cacheMarker, outDir, context)) {
+                log.info("Grpc Zero: proto inputs and config unchanged - skipping code generation (cache hit)");
+                return true;
+            }
+
             try (FileSystem fs = ZeroFs.newFileSystem(
                     Configuration.unix().toBuilder().setAttributeViews("unix").build())) {
                 var workdir = fs.getPath(".");
@@ -231,6 +260,7 @@ public class GrpcZeroCodeGen implements CodeGenProvider {
                 postprocessing(context, outDir);
                 log.info("Grpc Zero: Successfully finished generating and post-processing sources from proto files");
 
+                writeCacheMarker(cacheMarker, inputHash);
                 return true;
             } catch (IOException e) {
                 throw new CodeGenException("Failed to generate files from proto file in " + inputDir.toAbsolutePath(), e);
@@ -238,6 +268,86 @@ public class GrpcZeroCodeGen implements CodeGenProvider {
         }
 
         return false;
+    }
+
+    /**
+     * Computes a content hash over everything that influences generated output: the compiled
+     * proto files, the imported proto files, the output-affecting config options and the
+     * grpc-zero version. Used to skip regeneration when nothing has changed.
+     */
+    private String computeInputHash(List<String> protoFiles, Collection<String> importDirs, CodeGenContext context)
+            throws CodeGenException {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            String version = GrpcZeroCodeGen.class.getPackage().getImplementationVersion();
+            md.update(("grpc-zero\0" + (version == null ? "dev" : version)).getBytes(StandardCharsets.UTF_8));
+            for (String key : CACHE_RELEVANT_CONFIG_KEYS) {
+                md.update(key.getBytes(StandardCharsets.UTF_8));
+                md.update((byte) 0);
+                md.update(context.config().getOptionalValue(key, String.class).orElse("").getBytes(StandardCharsets.UTF_8));
+                md.update((byte) 0);
+            }
+            // Every proto that affects output (compiled + imported), deterministically ordered.
+            TreeSet<Path> protos = new TreeSet<>();
+            for (String f : protoFiles) {
+                protos.add(Path.of(f).toAbsolutePath().normalize());
+            }
+            for (String dir : importDirs) {
+                Path d = Path.of(dir);
+                if (Files.isDirectory(d)) {
+                    try (Stream<Path> walk = Files.walk(d)) {
+                        walk.filter(Files::isRegularFile)
+                                .filter(p -> p.toString().endsWith(PROTO))
+                                .map(p -> p.toAbsolutePath().normalize())
+                                .forEach(protos::add);
+                    }
+                }
+            }
+            for (Path p : protos) {
+                // file name (path-independent) + content, so a moved-but-identical tree still hits the cache
+                md.update(p.getFileName().toString().getBytes(StandardCharsets.UTF_8));
+                md.update((byte) 0);
+                md.update(Files.readAllBytes(p));
+                md.update((byte) 0);
+            }
+            return HexFormat.of().formatHex(md.digest());
+        } catch (NoSuchAlgorithmException | IOException e) {
+            throw new CodeGenException("Failed to compute grpc-zero codegen input hash", e);
+        }
+    }
+
+    /**
+     * Returns true when a prior run with the same input hash is still valid: the marker matches,
+     * generated sources are still present, and (when requested) the descriptor set still exists.
+     */
+    private boolean isUpToDate(String inputHash, Path cacheMarker, Path outDir, CodeGenContext context) {
+        try {
+            if (!Files.isRegularFile(cacheMarker) || !inputHash.equals(Files.readString(cacheMarker).strip())) {
+                return false;
+            }
+            boolean hasGeneratedJava;
+            try (Stream<Path> walk = Files.walk(outDir)) {
+                hasGeneratedJava = walk.anyMatch(p -> p.toString().endsWith(".java"));
+            }
+            if (!hasGeneratedJava) {
+                return false;
+            }
+            return !shouldGenerateDescriptorSet(context.config())
+                    || Files.isRegularFile(getDescriptorSetOutputFile(context));
+        } catch (IOException e) {
+            // Any uncertainty -> regenerate.
+            return false;
+        }
+    }
+
+    private void writeCacheMarker(Path cacheMarker, String inputHash) {
+        try {
+            Files.createDirectories(cacheMarker.getParent());
+            Files.writeString(cacheMarker, inputHash);
+        } catch (IOException e) {
+            // Caching is best-effort; a marker write failure must never fail the build.
+            log.debugf(e, "Grpc Zero: failed to write codegen cache marker at %s", cacheMarker);
+        }
     }
 
     void processProtoFiles(List<String> protoFiles, Set<String> protoDirs,
