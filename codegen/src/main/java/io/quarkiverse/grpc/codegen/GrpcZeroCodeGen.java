@@ -175,7 +175,7 @@ public class GrpcZeroCodeGen implements CodeGenProvider {
             // Input-hash cache: skip the (slow) WASM codegen when the proto set, the
             // output-affecting config and the grpc-zero version are all unchanged and
             // the previously generated output is still present.
-            String inputHash = computeInputHash(protoFiles, protosToImport, context);
+            String inputHash = computeInputHash(protoFiles, protosToImport, context.config());
             Path cacheMarker = outDir.resolve(CODEGEN_CACHE_MARKER);
             if (isUpToDate(inputHash, cacheMarker, outDir, context)) {
                 log.info("Grpc Zero: proto inputs and config unchanged - skipping code generation (cache hit)");
@@ -275,7 +275,8 @@ public class GrpcZeroCodeGen implements CodeGenProvider {
      * proto files, the imported proto files, the output-affecting config options and the
      * grpc-zero version. Used to skip regeneration when nothing has changed.
      */
-    private String computeInputHash(List<String> protoFiles, Collection<String> importDirs, CodeGenContext context)
+    // Package-private for unit testing.
+    String computeInputHash(List<String> protoFiles, Collection<String> importDirs, Config config)
             throws CodeGenException {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
@@ -284,7 +285,7 @@ public class GrpcZeroCodeGen implements CodeGenProvider {
             for (String key : CACHE_RELEVANT_CONFIG_KEYS) {
                 md.update(key.getBytes(StandardCharsets.UTF_8));
                 md.update((byte) 0);
-                md.update(context.config().getOptionalValue(key, String.class).orElse("").getBytes(StandardCharsets.UTF_8));
+                md.update(config.getOptionalValue(key, String.class).orElse("").getBytes(StandardCharsets.UTF_8));
                 md.update((byte) 0);
             }
             // Every proto that affects output (compiled + imported), deterministically ordered.
