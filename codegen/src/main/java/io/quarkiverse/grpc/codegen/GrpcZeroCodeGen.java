@@ -32,7 +32,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.Set;
-import java.util.TreeSet;
+import java.util.TreeMap;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -175,9 +175,19 @@ public class GrpcZeroCodeGen implements CodeGenProvider {
             // Input-hash cache: skip the (slow) WASM codegen when the proto set, the
             // output-affecting config and the grpc-zero version are all unchanged and
             // the previously generated output is still present.
-            String inputHash = computeInputHash(protoFiles, protosToImport, context.config());
+            String inputHash = computeInputHash(protoFiles, protoDirs, protosToImport, context.config());
             Path cacheMarker = outDir.resolve(CODEGEN_CACHE_MARKER);
-            if (isUpToDate(inputHash, cacheMarker, outDir, context)) {
+            boolean descriptorRequired = shouldGenerateDescriptorSet(context.config());
+            Path descriptorFile = null;
+            if (descriptorRequired) {
+                try {
+                    descriptorFile = getDescriptorSetOutputFile(context);
+                } catch (IOException e) {
+                    // Cannot resolve the descriptor target -> cannot prove the cache is valid; regenerate.
+                    descriptorFile = null;
+                }
+            }
+            if (isUpToDate(inputHash, cacheMarker, outDir, descriptorRequired, descriptorFile)) {
                 log.info("Grpc Zero: proto inputs and config unchanged - skipping code generation (cache hit)");
                 return true;
             }
@@ -274,9 +284,15 @@ public class GrpcZeroCodeGen implements CodeGenProvider {
      * Computes a content hash over everything that influences generated output: the compiled
      * proto files, the imported proto files, the output-affecting config options and the
      * grpc-zero version. Used to skip regeneration when nothing has changed.
+     *
+     * <p>
+     * Each proto contributes its <em>import-relative</em> name (the path protoc sees, relative
+     * to its proto root) plus its content. The relative name matters because it lands in the
+     * generated {@code FileDescriptorProto.name} and drives the Java output layout, so a
+     * move/rename within the tree must invalidate the cache even when the bytes are identical.
      */
     // Package-private for unit testing.
-    String computeInputHash(List<String> protoFiles, Collection<String> importDirs, Config config)
+    String computeInputHash(List<String> protoFiles, Set<String> protoDirs, Collection<String> importDirs, Config config)
             throws CodeGenException {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
@@ -288,27 +304,30 @@ public class GrpcZeroCodeGen implements CodeGenProvider {
                 md.update(config.getOptionalValue(key, String.class).orElse("").getBytes(StandardCharsets.UTF_8));
                 md.update((byte) 0);
             }
-            // Every proto that affects output (compiled + imported), deterministically ordered.
-            TreeSet<Path> protos = new TreeSet<>();
+            // Every proto that affects output (compiled + imported), mapped to the import-relative
+            // name protoc will see. Ordered by absolute path for a deterministic digest.
+            TreeMap<Path, String> protos = new TreeMap<>();
             for (String f : protoFiles) {
-                protos.add(Path.of(f).toAbsolutePath().normalize());
+                protos.put(Path.of(f).toAbsolutePath().normalize(), relativizeProtoFile(f, protoDirs));
             }
             for (String dir : importDirs) {
-                Path d = Path.of(dir);
+                Path d = Path.of(dir).toAbsolutePath().normalize();
                 if (Files.isDirectory(d)) {
                     try (Stream<Path> walk = Files.walk(d)) {
                         walk.filter(Files::isRegularFile)
                                 .filter(p -> p.toString().endsWith(PROTO))
-                                .map(p -> p.toAbsolutePath().normalize())
-                                .forEach(protos::add);
+                                .forEach(p -> {
+                                    Path abs = p.toAbsolutePath().normalize();
+                                    protos.put(abs, d.relativize(abs).toString().replace("\\", "/"));
+                                });
                     }
                 }
             }
-            for (Path p : protos) {
-                // file name (path-independent) + content, so a moved-but-identical tree still hits the cache
-                md.update(p.getFileName().toString().getBytes(StandardCharsets.UTF_8));
+            for (Map.Entry<Path, String> entry : protos.entrySet()) {
+                // import-relative name (path-sensitive) + content
+                md.update(entry.getValue().getBytes(StandardCharsets.UTF_8));
                 md.update((byte) 0);
-                md.update(Files.readAllBytes(p));
+                md.update(Files.readAllBytes(entry.getKey()));
                 md.update((byte) 0);
             }
             return HexFormat.of().formatHex(md.digest());
@@ -319,9 +338,15 @@ public class GrpcZeroCodeGen implements CodeGenProvider {
 
     /**
      * Returns true when a prior run with the same input hash is still valid: the marker matches,
-     * generated sources are still present, and (when requested) the descriptor set still exists.
+     * generated sources are still present, and (when a descriptor set was requested) it still
+     * exists on disk.
+     *
+     * @param descriptorRequired whether descriptor-set generation is enabled for this build
+     * @param descriptorFile the resolved descriptor target, or {@code null} when it could not
+     *        be resolved (treated as "not present" so the build regenerates)
      */
-    private boolean isUpToDate(String inputHash, Path cacheMarker, Path outDir, CodeGenContext context) {
+    // Package-private for unit testing.
+    boolean isUpToDate(String inputHash, Path cacheMarker, Path outDir, boolean descriptorRequired, Path descriptorFile) {
         try {
             if (!Files.isRegularFile(cacheMarker) || !inputHash.equals(Files.readString(cacheMarker).strip())) {
                 return false;
@@ -333,8 +358,7 @@ public class GrpcZeroCodeGen implements CodeGenProvider {
             if (!hasGeneratedJava) {
                 return false;
             }
-            return !shouldGenerateDescriptorSet(context.config())
-                    || Files.isRegularFile(getDescriptorSetOutputFile(context));
+            return !descriptorRequired || (descriptorFile != null && Files.isRegularFile(descriptorFile));
         } catch (IOException e) {
             // Any uncertainty -> regenerate.
             return false;
