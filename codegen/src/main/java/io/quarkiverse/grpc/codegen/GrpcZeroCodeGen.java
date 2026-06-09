@@ -82,8 +82,10 @@ public class GrpcZeroCodeGen implements CodeGenProvider {
     // Lives in outDir so it shares the generated sources' lifecycle (a `clean` wipes both).
     private static final String CODEGEN_CACHE_MARKER = ".grpc-zero-inputs.sha256";
     // Config keys whose values change generated output; folded into the cache key.
+    // GENERATE_KOTLIN is deliberately absent: Kotlin generation can be driven by the presence of
+    // the quarkus-kotlin dependency when the config is unset, so the *effective* decision
+    // (shouldGenerateKotlin) is hashed instead of the raw config value.
     private static final String[] CACHE_RELEVANT_CONFIG_KEYS = {
-            GENERATE_KOTLIN,
             GENERATE_DESCRIPTOR_SET,
             DESCRIPTOR_SET_OUTPUT_DIR,
             DESCRIPTOR_SET_FILENAME,
@@ -184,6 +186,8 @@ public class GrpcZeroCodeGen implements CodeGenProvider {
                     descriptorFile = getDescriptorSetOutputFile(context);
                 } catch (IOException e) {
                     // Cannot resolve the descriptor target -> cannot prove the cache is valid; regenerate.
+                    // The real descriptor write below re-throws if this is a genuine I/O problem.
+                    log.debugf(e, "Grpc Zero: could not resolve descriptor target for cache check; will regenerate");
                     descriptorFile = null;
                 }
             }
@@ -304,6 +308,10 @@ public class GrpcZeroCodeGen implements CodeGenProvider {
                 md.update(config.getOptionalValue(key, String.class).orElse("").getBytes(StandardCharsets.UTF_8));
                 md.update((byte) 0);
             }
+            // Effective Kotlin decision (config OR the quarkus-kotlin dependency), so toggling the
+            // dependency without setting the config still invalidates the cache.
+            md.update(("kotlin\0" + shouldGenerateKotlin(config)).getBytes(StandardCharsets.UTF_8));
+            md.update((byte) 0);
             // Every proto that affects output (compiled + imported), mapped to the import-relative
             // name protoc will see. Ordered by absolute path for a deterministic digest.
             TreeMap<Path, String> protos = new TreeMap<>();
@@ -360,7 +368,8 @@ public class GrpcZeroCodeGen implements CodeGenProvider {
             }
             return !descriptorRequired || (descriptorFile != null && Files.isRegularFile(descriptorFile));
         } catch (IOException e) {
-            // Any uncertainty -> regenerate.
+            // Any uncertainty -> regenerate (the safe direction).
+            log.debugf(e, "Grpc Zero: cache up-to-date check failed; will regenerate");
             return false;
         }
     }
