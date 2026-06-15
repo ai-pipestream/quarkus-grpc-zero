@@ -1,0 +1,15 @@
+Manifest-Version: 1.0
+Created-By: Maven Source Plugin 3.4.0
+Specification-Title: Quarkus - gRPC - Code Gen
+Specification-Version: 3.36
+Implementation-Title: Quarkus - gRPC - Code Gen
+Implementation-Version: 3.36.1
+Implementation-URL: https://github.com/quarkusio/quarkus
+Java-Vendor: Eclipse Adoptium
+Java-Version: 21.0.11
+Os-Arch: amd64
+Os-Name: Linux
+Scm-Connection: scm:git:git@github.com:quarkusio/quarkus.git
+Scm-Revision: 18cdccedb121024bc09f511fee0abd85f4c56659
+Scm-Url: https://github.com/quarkusio/quarkus
+
